@@ -30,11 +30,17 @@ train_images, val_images, train_labels, val_labels = train_test_split(
 
 # 파일 복사
 for img, lbl in zip(train_images, train_labels):
-    shutil.copy(img, train_image_dir)
-    shutil.copy(lbl, train_label_dir)
+    if os.path.exists(lbl):  # 라벨 파일 존재 여부 확인
+        shutil.copy(img, train_image_dir)
+        shutil.copy(lbl, train_label_dir)
+    else:
+        print(f"라벨 파일 없음: {lbl}")
 
 for img, lbl in zip(val_images, val_labels):
-    shutil.copy(img, val_image_dir)
-    shutil.copy(lbl, val_label_dir)
+    if os.path.exists(lbl):  # 라벨 파일 존재 여부 확인
+        shutil.copy(img, val_image_dir)
+        shutil.copy(lbl, val_label_dir)
+    else:
+        print(f"라벨 파일 없음: {lbl}")
 
 print(f"YOLO 학습 데이터가 {output_dir}에 준비되었습니다.")

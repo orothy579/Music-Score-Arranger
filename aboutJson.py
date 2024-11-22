@@ -28,3 +28,4 @@ for ann in data['annotations']:
 print(type(data['annotations']))  # 딕셔너리인지 확인
 # print(data['annotations'].keys())  # 딕셔너리의 키 확인
 
+print(data['annotations']['412579'])  # 특정 키의 값 확인
