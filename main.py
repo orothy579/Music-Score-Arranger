@@ -11,7 +11,7 @@ quarter_note_ti = cv2.imread(notes_path + "quarterNoteTi.png", cv2.IMREAD_UNCHAN
 treble_clef = cv2.imread(notes_path + "trebleClef.png", cv2.IMREAD_UNCHANGED)
 
 # PyTorch 모델 로드
-model_path = "/Users/lch/development/opencv/finalProject/yolov5/runs/train/exp28/weights/best.pt"
+model_path = "/Users/lch/development/opencv/finalProject/yolov5/runs/train/exp29/weights/best.pt"
 model = torch.hub.load('./yolov5', 'custom', path=model_path, source='local')
 
 # 이미지 로드 및 전처리
@@ -61,6 +61,13 @@ def draw_staff(image, bounding_box):
     for i in range(5):  # 오선 5줄 그림
         y = int(y1 + i * staff_spacing)
         cv2.line(image, (int(x1), y), (int(x2), y), (0, 0, 0), 2)
+        # staff_spacing 계산 로직 추가
+        if staff_spacing is None:
+            raise ValueError("staff_spacing 값이 None입니다. 올바른 값으로 설정되었는지 확인하세요.")
+
+        staff_center_y = staff_y1 + staff_spacing * 2.5
+        print(f"staff_y1: {staff_y1}, staff_spacing: {staff_spacing}")
+
 
 
 def draw_treble_clef_image(image, bounding_box):
@@ -92,31 +99,31 @@ def draw_note_image(image, bounding_box, note_type, is_ti):
 # 탐지 결과 처리
 for detection in detections:
     x1, y1, x2, y2, confidence, class_id = detection
-    if confidence > 0.33:
+    if confidence > 0.35:
         # 기존 Detection 이미지 출력
         label = f"Class {int(class_id)}: {confidence:.2f}"
         cv2.rectangle(image, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 255), 2)
         cv2.putText(image, label, (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
 
-        # 새로운 이미지에 추가
-        if class_id == 0:  # 오선
-            draw_staff(new_image, (x1, y1, x2, y2))
-        elif class_id == 1:  # 높은 음자리표
-            draw_treble_clef_image(new_image, (x1, y1, x2, y2))
-        elif class_id == 2:  # 8분 음표
-            center_y = (y1 + y2) // 2
-            draw_note_image(new_image, (x1, y1, x2, y2), "eighth", is_ti(center_y, staff_y1, staff_spacing))
-        elif class_id == 3:  # 4분 음표
-            center_y = (y1 + y2) // 2
-            draw_note_image(new_image, (x1, y1, x2, y2), "quarter", is_ti(center_y, staff_y1, staff_spacing))
+        # # 새로운 이미지에 추가
+        # if class_id == 0:  # 오선
+        #     draw_staff(new_image, (x1, y1, x2, y2))
+        # elif class_id == 1:  # 높은 음자리표
+        #     draw_treble_clef_image(new_image, (x1, y1, x2, y2))
+        # elif class_id == 2:  # 8분 음표
+        #     center_y = (y1 + y2) // 2
+        #     draw_note_image(new_image, (x1, y1, x2, y2), "eighth", is_ti(center_y, staff_y1, staff_spacing))
+        # elif class_id == 3:  # 4분 음표
+        #     center_y = (y1 + y2) // 2
+        #     draw_note_image(new_image, (x1, y1, x2, y2), "quarter", is_ti(center_y, staff_y1, staff_spacing))
 
 # 기존 Detection 이미지 출력
 cv2.imshow("Detections", image)
 cv2.imwrite("detected_image.jpg", image)
 
-# 새 이미지 출력
-cv2.imshow("New Image", new_image)
-cv2.imwrite("new_image.jpg", new_image)
+# # 새 이미지 출력
+# cv2.imshow("New Image", new_image)
+# cv2.imwrite("new_image.jpg", new_image)
 
 cv2.waitKey(0)
 cv2.destroyAllWindows()

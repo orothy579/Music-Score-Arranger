@@ -1,10 +1,9 @@
 from albumentations import (
     Compose, RandomBrightnessContrast, HueSaturationValue, ShiftScaleRotate,
-    HorizontalFlip, GridDistortion, BboxParams
+    HorizontalFlip, GridDistortion, GaussianBlur, MotionBlur, BboxParams, CoarseDropout, InvertImg
 )
-
 import cv2
-
+import os
 
 # 원래 라벨 데이터를 YOLO 포맷으로 정의
 original_labels = [
@@ -26,27 +25,37 @@ original_labels = [
     [4, 0.85859375, 0.58359375, 0.02265625, 0.13984375]
 ]
 
-# Albumentations 변환 정의 (바운딩 박스 포함)
+# 데이터 증강 정의
 transform = Compose(
     [
-        RandomBrightnessContrast(p=0.5),
-        HueSaturationValue(hue_shift_limit=15, sat_shift_limit=30, val_shift_limit=20, p=0.5),
-        ShiftScaleRotate(shift_limit=0.1, scale_limit=0.1, rotate_limit=15, p=0.7),
-        HorizontalFlip(p=0.5),
-        GridDistortion(p=0.3),
+        RandomBrightnessContrast(brightness_limit=0.3, contrast_limit=0.3, p=0.7),  # 밝기와 대비 조정
+        HueSaturationValue(hue_shift_limit=20, sat_shift_limit=50, val_shift_limit=30, p=0.6),  # 색상 변환
+        ShiftScaleRotate(shift_limit=0.2, scale_limit=0.2, rotate_limit=45, border_mode=cv2.BORDER_CONSTANT, p=0.8),
+        HorizontalFlip(p=0.5),  # 좌우 반전
+        GridDistortion(num_steps=5, distort_limit=0.4, p=0.4),  # 격자 왜곡
+        GaussianBlur(blur_limit=(3, 5), p=0.5),  # 가우시안 블러
+        MotionBlur(blur_limit=(3, 7), p=0.4),  # 모션 블러
+        CoarseDropout(max_holes=5, max_height=15, max_width=15, p=0.3),  # 랜덤 노이즈
+        InvertImg(p=0.3),  # 이미지 네거티브
     ],
     bbox_params=BboxParams(format='yolo', label_fields=['class_labels'])
 )
 
-# 원본 이미지 읽기
-image = cv2.imread('/Users/lch/development/opencv/finalProject/apple_dataset/train/images/apple_c.jpg')
+# 이미지 읽기
+input_image_path = '/Users/lch/development/opencv/finalProject/apple_dataset/train/images/apple_c.jpg'
+image = cv2.imread(input_image_path)
 image_height, image_width = image.shape[:2]
 
 # 증강된 이미지와 라벨 생성
-for i in range(50):  # 10개의 증강된 이미지 생성
+output_image_dir = '/Users/lch/development/opencv/finalProject/apple_dataset/train/images/'
+output_label_dir = '/Users/lch/development/opencv/finalProject/apple_dataset/train/labels/'
+os.makedirs(output_image_dir, exist_ok=True)
+os.makedirs(output_label_dir, exist_ok=True)
+
+for i in range(100):  # 100개의 증강된 이미지 생성
     augmented = transform(
         image=image,
-        bboxes=[label[1:] for label in original_labels],  # 좌표만 전달
+        bboxes=[label[1:] for label in original_labels],  # 바운딩 박스 좌표만 전달
         class_labels=[label[0] for label in original_labels],  # 클래스 ID만 전달
     )
     augmented_image = augmented['image']
@@ -54,11 +63,11 @@ for i in range(50):  # 10개의 증강된 이미지 생성
     augmented_classes = augmented['class_labels']
 
     # 증강된 이미지 저장
-    output_image_path = f'/Users/lch/development/opencv/finalProject/apple_dataset/train/images/augmented_image_{i}.jpg'
+    output_image_path = os.path.join(output_image_dir, f'augmented_image_{i}.jpg')
     cv2.imwrite(output_image_path, augmented_image)
 
     # 증강된 라벨 저장 (YOLO 포맷)
-    output_label_path = f'/Users/lch/development/opencv/finalProject/apple_dataset/train/labels/augmented_image_{i}.txt'
+    output_label_path = os.path.join(output_label_dir, f'augmented_image_{i}.txt')
     with open(output_label_path, 'w') as f:
         for bbox, class_id in zip(augmented_bboxes, augmented_classes):
             bbox_str = ' '.join(map(str, bbox))  # 바운딩 박스 좌표를 문자열로 변환

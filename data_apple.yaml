@@ -1,0 +1,5 @@
+train: /Users/lch/development/opencv/finalProject/apple_dataset/train
+val: /Users/lch/development/opencv/finalProject/apple_dataset/val
+
+nc: 5
+names: ['staff', 'Treble Clef', 'Eighth Note', 'Quarter Note', 'Half Note']
