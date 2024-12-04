@@ -1,21 +1,3 @@
-from PIL import Image, ImageDraw, ImageFont
-import torch
-import cv2
-import numpy as np
-
-# 음표 이미지 로드
-notes_path = "notes/"
-eighth_note = cv2.imread(notes_path + "eighthNote.png", cv2.IMREAD_UNCHANGED)
-
-quarter_note = cv2.imread(notes_path + "quarterNote.png", cv2.IMREAD_UNCHANGED)
-half_note = cv2.imread(notes_path + "halfNote.png",  cv2.IMREAD_UNCHANGED)
-treble_clef = cv2.imread(notes_path + "trebleClef.png", cv2.IMREAD_UNCHANGED)
-flat = cv2.imread(notes_path + "flat.png", cv2.IMREAD_UNCHANGED)
-
-# PyTorch 모델 로드
-model_path = "/Users/lch/development/opencv/finalProject/yolov5/runs/train/exp29/weights/best.pt"
-model = torch.hub.load('./yolov5', 'custom', path=model_path, source='local')
-
 # 이미지 로드 및 전처리
 image_path = "apple_c.jpg"
 image = cv2.imread(image_path)
@@ -28,7 +10,8 @@ detections = results.xyxy[0].numpy()  # 탐지된 객체 좌표
 # 새 이미지 생성
 new_image = np.ones_like(image) * 255  # 흰색 배경 이미지
 
-
+staff_y1 = 10
+staff_spacing = 10
 
 def overlay_image(background, overlay, x, y, width, height):
     """
@@ -67,9 +50,9 @@ def draw_staff(image, bounding_box):
     y2 = max(0, min(y2, image_height))
 
     # staff_y1과 staff_spacing 계산
-    staff_y1 = float(y1)
-    staff_height = float(y2 - y1)  # 오선 박스의 높이
-    staff_spacing = staff_height / 4.0  # 오선 간격 계산 (5개의 선이므로 4개의 간격)
+    staff_y1 = y1
+    staff_height = y2 - y1  # 오선 박스의 높이
+    staff_spacing = staff_height / 4  # 오선 간격 계산 (5개의 선이므로 4개의 간격)
 
     print(f"staff_y1: {staff_y1}, staff_spacing: {staff_spacing}")
 
@@ -88,10 +71,9 @@ def draw_staff(image, bounding_box):
     # 마디선 그리기
     line_thickness = 2
     for x in bar_positions:
-        cv2.line(image, (x, bar_y_start), (x, bar_y_end),
-                 (0, 0, 0), thickness=line_thickness)
+        cv2.line(image, (x, bar_y_start), (x, bar_y_end), (0, 0, 0), thickness=line_thickness)
 
-    
+    print(f"Bar positions: {bar_positions}, Bar y-range: {bar_y_start}-{bar_y_end}")
 
 
 def draw_treble_clef_image(image, bounding_box):
@@ -108,16 +90,6 @@ def draw_treble_clef_image(image, bounding_box):
     overlay_image(image, treble_clef, int(x1), int(y1), width, height)
 
 
-def draw_flat_image(image, bounding_box):
-    x1, y1, x2, y2 = bounding_box
-    x1 = x1 - 130
-    y1 = y1 - 20
-    x2 = x2 - 20
-    y2 = y2 + 20
-    width = int(x2 - x1)
-    height = int(y2 - y1)
-    overlay_image(image, flat, int(x1), int(y1), width, height)
-
 def draw_note_image(image, bounding_box, note_type):
     """
     음표 이미지를 추가합니다.
@@ -133,30 +105,27 @@ def draw_note_image(image, bounding_box, note_type):
     elif note_type == "half":
         overlay = half_note
     else:
-        return
+       return
     overlay_image(image, overlay, int(x1), int(y1), width, height)
 
 
 # 좌표 범위를 설정하여 각 음표와 매핑
 note_ranges = {
     'C': (350.5, 352),
-    'D': (346, 350.5),
-    'E': (333, 346),
-    'F': (325, 333),
-    'G': (314, 325),
-    'A': (310, 320),
-    'B': (300, 310)
+    'D': (346, 350.5),  
+    'E': (333, 346),  
+    'F': (325, 333),  
+    'G': (314, 325),  
+    'A': (310, 320),  
+    'B': (300, 310)   
 }
 
 # 좌표 범위에 해당하는 음을 찾아주는 함수
-
-
 def get_note_from_coordinate(y1):
     for i, (note, (min_y, max_y)) in enumerate(note_ranges.items()):
         if min_y <= y1 <= max_y:
             return note  # 일반적인 경우는 음표 이름 반환
     return "Unknown"
-
 
 detections = sorted(detections, key=lambda det: det[0])
 
@@ -183,6 +152,8 @@ for i, detection in enumerate(detections):
             note = "D"  # 노트를 강제로 D로 설정
         elif i == 11:
             note = "E"  # 노트를 강제로 E로 설정
+        else:
+            print(f"Note: {note}")
 
         # x1, y1, x2, y2, 노트 정보를 리스트에 저장
         processed_notes.append({
@@ -196,6 +167,30 @@ for i, detection in enumerate(detections):
             "confidence": float(confidence)
         })
 
+def map_notes_to_positions(processed_notes, staff_y1, staff_spacing):
+    """
+    탐지된 음표 데이터를 계이름과 매핑하고 새 위치를 반환.
+    """
+    note_positions = {
+        "C": staff_y1 + staff_spacing * 4,    # 4번째 줄
+        "D": staff_y1 + staff_spacing * 3.5,  # 3.5번째 줄
+        "E": staff_y1 + staff_spacing * 3,    # 3번째 줄
+        "F": staff_y1 + staff_spacing * 2.5,  # 2.5번째 줄
+        "G": staff_y1 + staff_spacing * 2,    # 2번째 줄
+        "A": staff_y1 + staff_spacing * 1.5,  # 1.5번째 줄
+        "B": staff_y1 + staff_spacing * 1,    # 1번째 줄
+    }
+
+    for note_data in processed_notes:
+        note = note_data["note"]
+        if note in note_positions:
+            # 새로운 y 좌표를 계산하고 저장
+            note_data["new_y"] = int(note_positions[note])
+        else:
+            # 계이름을 매핑하지 못한 경우 기존 y 좌표 유지
+            note_data["new_y"] = note_data["y1"]
+    return processed_notes
+
 
 def clone_region_to_new_image(src_image, dest_image, bounding_box):
     """
@@ -204,6 +199,27 @@ def clone_region_to_new_image(src_image, dest_image, bounding_box):
     x1, y1, x2, y2 = map(int, bounding_box)
     region = src_image[y1:y2, x1:x2]
     dest_image[y1:y2, x1:x2] = region
+
+def draw_notes_on_new_positions(new_image, processed_notes, average_width, average_height):
+    """
+    매핑된 y 좌표를 기반으로 음표를 그리기.
+    """
+    for note_data in processed_notes:
+        x1, x2 = note_data["x1"], note_data["x2"]
+        new_y = note_data["new_y"]  # 매핑된 y 좌표
+        class_id = note_data["class_id"]  # 음표의 class_id (2, 3, 4)
+
+        # 음표 높이를 기준으로 위치 조정
+        top_y = new_y - (average_height // 2)
+        bottom_y = new_y + (average_height // 2)
+
+        # class_id에 따라 음표를 그리기
+        if class_id == 2:  # 8분 음표
+            draw_note_image(new_image, (x1, top_y, x2, bottom_y), "eighth")
+        elif class_id == 3:  # 4분 음표
+            draw_note_image(new_image, (x1, top_y, x2, bottom_y), "quarter")
+        elif class_id == 4:  # 2분 음표
+            draw_note_image(new_image, (x1, top_y, x2, bottom_y), "half")
 
 
 # 고정된 크기를 계산하기 위한 변수
@@ -219,76 +235,50 @@ for detection in detections:
         widths.append(width)
         heights.append(height)
 
-# 평균 너비와 높이 계산
-average_width = int(sum(widths) / len(widths)) if widths else 30  # 기본값 30
-average_height = int(sum(heights) / len(heights)) if heights else 50  # 기본값 50
-
-print(f"평균 너비: {average_width}, 평균 높이: {average_height}")
-
-
 # 탐지 결과 처리
 for detection in detections:
     x1, y1, x2, y2, confidence, class_id = detection
 
     if confidence > 0.35:
-        x1_new = int(x1)
-        x2_new = int(x1 + average_width)
-        # 기존 Detection 이미지 출력
-        label = f"Class {int(class_id)}"
+        # 중심 y 좌표 계산
+        center_y = (y1 + y2) // 2
 
-        # 오선 및 높은 음자리표 그리기
-        if class_id == 0:  # 오선
-            draw_staff(new_image, (x1, y1, x2, y2))
-            # 계이름을 오선과 staff_spacing에 매핑
-            note_positions = {
-                "C": staff_y1 + staff_spacing * 4,
-                "D": staff_y1 + staff_spacing * 3.5,
-                "E": staff_y1 + staff_spacing * 2.7,
-                "F": staff_y1 + staff_spacing * 2.5,
-                "G": staff_y1 + staff_spacing * 2,
-                "A": staff_y1 + staff_spacing * 1.5,
-                "B": staff_y1 + staff_spacing * 1,
-                "C_h" : staff_y1 + staff_spacing * 0.5, # 높은 도
+        if class_id in [2, 3, 4]:  # 8분, 4분, 2분 음표
+            note = get_note_from_coordinate(y1)  # 계이름 매핑
+            processed_notes.append({
+                "x1": int(x1),
+                "y1": int(y1),
+                "x2": int(x2),
+                "y2": int(y2),
+                "note": note,
+                "class_id": int(class_id),
+                "confidence": float(confidence),
+            })
 
-            }
+        # 오선 및 높은 음자리표 처리
+        elif class_id == 0:  # 오선
+            draw_staff(new_image, (x1, y1, x2, y2))  # 오선 그리기
         elif class_id == 1:  # 높은 음자리표
-            draw_treble_clef_image(new_image, (x1, y1, x2, y2))
+            draw_treble_clef_image(new_image, (x1, y1, x2, y2))  # 높은 음자리표 추가
 
-        draw_flat_image(new_image, (173, 357, 174, 358))
-        
-        note_list = ["F", "G", "A", "A", "B", "A", "G", "G", "A", "B", "B", "C_h", "B", "A"]
+# 평균 너비와 높이 계산
+widths = [note["x2"] - note["x1"] for note in processed_notes]
+heights = [note["y2"] - note["y1"] for note in processed_notes]
+average_width = int(sum(widths) / len(widths)) if widths else 30
+average_height = int(sum(heights) / len(heights)) if heights else 50
 
-        # 노트 추가 로직
-        for i, note_info in enumerate(processed_notes):
-            # note = note_info["note"]  # 각 음표의 계이름 가져오기
-            note = note_list[i]
-            class_id = note_info["class_id"]  # 음표의 종류 가져오기
-            x1_new = note_info["x1"]  # x1 좌표
-            x2_new = x1_new+average_width  # x2 좌표
+# 계이름 매핑 후 새로운 y 좌표 계산
+mapped_notes = map_notes_to_positions(processed_notes, staff_y1, staff_spacing)
 
-            if class_id in [2, 3, 4]:  # 8분, 4분, 2분 음표
-                if note in note_positions:  # note_positions에서 해당 note 확인
-                    y1_new = note_positions[note] - 50  # 계이름에 따라 y 좌표 계산
-                    y2_new = y1_new + int(average_height)
-
-                    # 음표 종류에 따라 그리기
-                    if class_id == 2:  # 8분 음표
-                        draw_note_image(new_image, (x1_new, y1_new, x2_new - 10, y2_new - 5), "eighth")
-                        print(f"8분 음표: note={note}, y1_new={y1_new}")
-                    elif class_id == 3:  # 4분 음표
-                        draw_note_image(new_image, (x1_new, y1_new+9, x2_new - 25, y2_new - 10), "quarter")
-                        print(f"4분 음표: note={note}, y1_new={y1_new}")
-                    elif class_id == 4:  # 2분 음표
-                        draw_note_image(new_image, (x1_new, y1_new-5, x2_new - 25, y2_new-5), "half")
-                        print(f"2분 음표: note={note}, y1_new={y1_new}")
-
-
+# 매핑된 y 좌표를 기반으로 음표를 한 번만 그리기
+draw_notes_on_new_positions(new_image, mapped_notes, average_width, average_height)
 
 # 기존 Detection 이미지 출력
 cv2.imshow("Detections", image)
 cv2.imwrite("Images/detected_image.jpg", image)
 
 # 새 이미지 (new_image)에 텍스트와 도형 추가
+from PIL import Image, ImageDraw, ImageFont
 
 # OpenCV 이미지 (BGR)를 PIL 이미지 (RGB)로 변환
 pil_image = Image.fromarray(cv2.cvtColor(new_image, cv2.COLOR_BGR2RGB))
@@ -311,14 +301,14 @@ rect_bottom_right = (1600, 300)  # 흰색 직사각형의 오른쪽 하단 좌�
 # 흰색 직사각형 그리기
 draw.rectangle([rect_top_left, rect_bottom_right], fill="white")
 
-draw.text((130, 320), "3", fill="black", font=large_font)  # 박자 추가
-draw.text((130, 370), "4", fill="black", font=large_font)  # 박자 추가
+draw.text((170, 310), "3", fill="black", font=large_font)  # 박자 추가
+draw.text((170, 350), "4", fill="black", font=large_font)  # 박자 추가
 
 # 텍스트 추가
-draw.text((230, 240), "F", fill="black", font=font)
-draw.text((550, 240), "C", fill="black", font=font)
-draw.text((900, 240), "C7", fill="black", font=font)
-draw.text((1300, 240), "F", fill="black", font=font)
+draw.text((230, 260), "F", fill="black", font=font)
+draw.text((550, 260), "C", fill="black", font=font)
+draw.text((900, 260), "C7", fill="black", font=font)
+draw.text((1300, 260), "F", fill="black", font=font)
 
 # PIL 이미지를 OpenCV 이미지로 다시 변환 (BGR로 변환)
 new_image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
