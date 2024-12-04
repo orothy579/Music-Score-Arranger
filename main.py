@@ -27,7 +27,7 @@ clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
 enhanced = clahe.apply(gray)  # CLAHE 적용
 
 # 노이즈 제거
-blurred = cv2.GaussianBlur(enhanced, (5, 5), 0)
+blurred = cv2.GaussianBlur(gray, (5, 5), 0)
 
 
 # 전처리된 이미지로 YOLO 모델 실행
@@ -133,26 +133,50 @@ def draw_note_image(image, bounding_box, note_type, is_ti):
     overlay_image(image, overlay, int(x1), int(y1), width, height)
 
 
-# 탐지 결과를 x1 기준으로 정렬
-sorted_detections = sorted(detections, key=lambda det: det[0])  # x1을 기준으로 정렬
+# 정규화 함수
+def normalize_bounding_boxes(detections, image_shape):
+    """
+    박스 좌표를 이미지 크기에 따라 정규화합니다.
+    """
+    height, width = image_shape[:2]
+    normalized = []
+    for det in detections:
+        x1, y1, x2, y2, confidence, class_id = det
+        x1_norm = x1 / width
+        y1_norm = y1 / height
+        x2_norm = x2 / width
+        y2_norm = y2 / height
+        normalized.append([x1_norm, y1_norm, x2_norm, y2_norm, confidence, class_id])
+    return normalized
+
+
+# 이미지 크기 확인
+image_height, image_width = image.shape[:2]
+
+# 정규화된 탐지 결과
+normalized_detections = normalize_bounding_boxes(detections, (image_height, image_width))
+
+# 정렬된 탐지 결과
+sorted_detections = sorted(normalized_detections, key=lambda det: det[0])  # x1 기준으로 정렬
 
 # 탐지 결과 처리
 for detection in sorted_detections:
-    x1, y1, x2, y2, confidence, class_id = detection
+    x1_norm, y1_norm, x2_norm, y2_norm, confidence, class_id = detection
 
-    if confidence > 0.35:
-        # center_y 계산
-        center_y = (y1 + y2) // 2
+    if confidence > 0.4:
+        # center_y 계산 (정규화된 좌표 기반)
+        center_y_norm = (y1_norm + y2_norm) / 2
 
-        # center_y 출력
-        print(f"Class {int(class_id)} | x1: {int(x1)} | center_y: {int(center_y)}")
+        # 정규화된 좌표 출력
+        print(f"Class {int(class_id)} | x1_norm: {x1_norm:.2f}, center_y_norm: {center_y_norm:.2f}")
+
+        # 비정규화 좌표 계산
+        x1, y1, x2, y2 = int(x1_norm * image_width), int(y1_norm * image_height), int(x2_norm * image_width), int(y2_norm * image_height)
 
         # 기존 Detection 이미지 출력
         label = f"Class {int(class_id)}"
-        cv2.rectangle(image, (int(x1), int(y1)),
-                      (int(x2), int(y2)), (0, 0, 255), 2)
-        cv2.putText(image, label, (int(x1), int(y1) - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+        cv2.rectangle(image, (x1, y1), (x2, y2), (0, 0, 255), 2)
+        cv2.putText(image, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
 
         # 새로운 이미지에 추가
         if class_id == 0:  # 오선
@@ -161,13 +185,14 @@ for detection in sorted_detections:
             draw_treble_clef_image(new_image, (x1, y1, x2, y2))
         elif class_id == 2:  # 8분 음표
             draw_note_image(new_image, (x1, y1, x2, y2), "eighth",
-                            is_ti(center_y, staff_y1, staff_spacing))
+                            is_ti((y1 + y2) // 2, staff_y1, staff_spacing))
         elif class_id == 3:  # 4분 음표
             draw_note_image(new_image, (x1, y1, x2, y2), "quarter",
-                            is_ti(center_y, staff_y1, staff_spacing))
+                            is_ti((y1 + y2) // 2, staff_y1, staff_spacing))
         elif class_id == 4:  # 2분 음표
             draw_note_image(new_image, (x1, y1, x2, y2), "half",
-                            is_ti(center_y, staff_y1, staff_spacing))
+                            is_ti((y1 + y2) // 2, staff_y1, staff_spacing))
+
 
 # 기존 Detection 이미지 출력
 cv2.imshow("Detections", image)
